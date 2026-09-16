@@ -14,4 +14,6 @@ test('renders subject and recipient email fields', () => {
 
   expect(screen.getByLabelText(/email subject/i)).toBeInTheDocument();
   expect(screen.getByLabelText(/to email address/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/reply to/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/from name/i)).toBeInTheDocument();
 });

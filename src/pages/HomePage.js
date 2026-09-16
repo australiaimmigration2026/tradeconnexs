@@ -1,11 +1,38 @@
 import '../App.css';
 import { useState } from 'react';
+import emailjs from '@emailjs/browser';
+
+const SERVICE_ID = 'service_0cqgfzg';
+const TEMPLATE_ID = 'template_zgljqkp';
+const PUBLIC_KEY = 'Wg5ZcPyVwQSQUnHVC';
+
+// ==================================================
+// CLOUDINARY
+// ==================================================
+
+// CHANGE THIS
+const CLOUDINARY_CLOUD_NAME = 'gc972vw1';
+
+// CHANGE THIS
+const CLOUDINARY_UPLOAD_PRESET = 'employment_images';
+
+const CLOUDINARY_UPLOAD_URL =
+  `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
+
 
 function HomePage() {
+
+  // ==================================================
+  // FORM DATA
+  // ==================================================
+
   const [formData, setFormData] = useState({
     clientName: '',
     emailSubject: '',
     toEmailAddress: '',
+    replyTo: '',
+    fromName: '',
+
     position: 'Farm Worker',
     companyName: 'Agribusiness Australia',
     employmentType: 'Full-time',
@@ -14,6 +41,7 @@ function HomePage() {
     workingHours: '',
     commencementDate: '',
     referenceNumber: '',
+
     hrManager: '',
     companyEmail: '',
     companyWebsite: '',
@@ -22,504 +50,657 @@ function HomePage() {
     companyAddress: '',
   });
 
-  const [photoPreview, setPhotoPreview] = useState('');
-  const [photoLink, setPhotoLink] = useState('');
-  const [htmlEmail, setHtmlEmail] = useState('');
+  // ==================================================
+  // IMAGE
+  // ==================================================
 
-  // Handle normal form fields
+  const [photoFile, setPhotoFile] = useState(null);
+
+  const [photoPreview, setPhotoPreview] = useState('');
+
+  const [photoUrl, setPhotoUrl] = useState('');
+
+  const [photoLink, setPhotoLink] = useState('');
+
+  // ==================================================
+  // STATUS
+  // ==================================================
+
+  const [uploading, setUploading] = useState(false);
+
+  const [sending, setSending] = useState(false);
+
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const [errorMessage, setErrorMessage] = useState('');
+
+
+  // ==================================================
+  // HANDLE FORM
+  // ==================================================
+
   const handleChange = (e) => {
+
     const { name, value } = e.target;
 
     setFormData((previous) => ({
       ...previous,
       [name]: value,
     }));
+
   };
 
-  // Handle image upload
+
+  // ==================================================
+  // URL VALIDATION
+  // ==================================================
+
+  const isValidUrl = (value) => {
+
+    try {
+
+      const url = new URL(value);
+
+      return (
+        url.protocol === 'http:' ||
+        url.protocol === 'https:'
+      );
+
+    } catch {
+
+      return false;
+
+    }
+
+  };
+
+
+  // ==================================================
+  // IMAGE SELECTION
+  // ==================================================
+
   const handlePhotoChange = (e) => {
+
     const file = e.target.files[0];
 
+    setSuccessMessage('');
+    setErrorMessage('');
+
+    setPhotoUrl('');
+
     if (!file) {
+
+      setPhotoFile(null);
       setPhotoPreview('');
+
       return;
+
     }
 
-    // Check image type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select a valid image file.');
+
+    // ----------------------------------------------
+    // Allowed formats
+    // ----------------------------------------------
+
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ];
+
+
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+
+      setErrorMessage(
+        'Only JPG, JPEG, PNG and WebP images are supported.'
+      );
+
       e.target.value = '';
+
+      setPhotoFile(null);
+      setPhotoPreview('');
+
       return;
+
     }
 
-    // Limit image size to 5 MB
+
+    // ----------------------------------------------
+    // 5 MB limit
+    // ----------------------------------------------
+
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5 MB.');
+
+      setErrorMessage(
+        'Image size must be less than 5 MB.'
+      );
+
       e.target.value = '';
+
+      setPhotoFile(null);
+      setPhotoPreview('');
+
       return;
+
     }
+
+
+    // ----------------------------------------------
+    // Save file
+    // ----------------------------------------------
+
+    setPhotoFile(file);
+
+
+    // ----------------------------------------------
+    // Local preview
+    // ----------------------------------------------
 
     const reader = new FileReader();
 
     reader.onload = (event) => {
-      setPhotoPreview(event.target.result);
+
+      setPhotoPreview(
+        event.target.result
+      );
+
     };
 
     reader.readAsDataURL(file);
+
   };
 
-  // Generate HTML email
-  const generateEmail = () => {
-    const clientName =
-      formData.clientName || '[Client Full Name]';
 
-    const emailSubject =
-      formData.emailSubject || '[Email Subject]';
+  // ==================================================
+  // UPLOAD IMAGE TO CLOUDINARY
+  // ==================================================
 
-    const toEmailAddress =
-      formData.toEmailAddress || '[Applicant Email Address]';
+  const uploadImageToCloudinary = async () => {
 
-    const farmLocation =
-      formData.farmLocation || '[Farm Location, State, Australia]';
+    if (!photoFile) {
 
-    const workingHours =
-      formData.workingHours || '[Hours per Week]';
+      throw new Error(
+        'Please select an image first.'
+      );
 
-    const commencementDate =
-      formData.commencementDate || '[Date]';
-
-    const referenceNumber =
-      formData.referenceNumber || '[Reference Number]';
-
-    const hrManager =
-      formData.hrManager || '[HR Manager’s Full Name]';
-
-    const companyEmail =
-      formData.companyEmail || '[Official Company Email Address]';
-
-    const companyWebsite =
-      formData.companyWebsite || '[Company Website]';
-
-    const companyPhone =
-      formData.companyPhone || '[Company Phone Number]';
-
-    const companyABN =
-      formData.companyABN || '[Company ABN, if applicable]';
-
-    const companyAddress =
-      formData.companyAddress || '[Company Office Address]';
-
-    // Clickable image
-    let imageHTML = '';
-
-    if (photoPreview) {
-      if (photoLink.trim()) {
-        imageHTML = `
-          <div style="margin: 30px 0; text-align: center;">
-            <a
-              href="${photoLink}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img
-                src="${photoPreview}"
-                alt="Employment Information"
-                style="
-                  display: block;
-                  width: 100%;
-                  max-width: 500px;
-                  height: auto;
-                  margin: 0 auto;
-                  border: 0;
-                  border-radius: 8px;
-                "
-              />
-            </a>
-          </div>
-        `;
-      } else {
-        imageHTML = `
-          <div style="margin: 30px 0; text-align: center;">
-            <img
-              src="${photoPreview}"
-              alt="Employment Information"
-              style="
-                display: block;
-                width: 100%;
-                max-width: 500px;
-                height: auto;
-                margin: 0 auto;
-                border: 0;
-                border-radius: 8px;
-              "
-            />
-          </div>
-        `;
-      }
     }
 
-    const generatedHTML = `
-<!DOCTYPE html>
-<html lang="en">
 
-<head>
-  <meta charset="UTF-8">
+    setUploading(true);
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+    setErrorMessage('');
+    setSuccessMessage('');
 
-  <title>${emailSubject}</title>
-</head>
-
-<body
-  style="
-    margin: 0;
-    padding: 0;
-    background-color: #f4f6f8;
-    font-family: Arial, Helvetica, sans-serif;
-    color: #222222;
-  "
->
-
-  <div
-    style="
-      width: 100%;
-      padding: 30px 0;
-    "
-  >
-
-    <div
-      style="
-        width: 90%;
-        max-width: 700px;
-        margin: 0 auto;
-        background-color: #ffffff;
-        padding: 35px;
-        box-sizing: border-box;
-        border-radius: 8px;
-      "
-    >
-
-      <p style="margin: 0 0 15px;">
-        <strong>To:</strong> ${toEmailAddress}<br>
-        <strong>Subject:</strong> ${emailSubject}
-      </p>
-
-      <p>
-        Dear Mr. ${clientName},
-      </p>
-
-      <p>
-        We are pleased to inform you that your application for the
-        position of <strong>${formData.position}</strong> with
-        <strong>${formData.companyName}</strong> has been successfully
-        accepted.
-      </p>
-
-      <p>
-        Following the review of your application and relevant experience,
-        we are delighted to offer you employment with our organisation
-        in Australia, subject to the completion of the applicable
-        employment and visa requirements.
-      </p>
-
-      <h3>
-        EMPLOYMENT OFFER DETAILS
-      </h3>
-
-      <p>
-        <strong>Company Name:</strong>
-        ${formData.companyName}
-        <br>
-
-        <strong>Position:</strong>
-        ${formData.position}
-        <br>
-
-        <strong>Employment Type:</strong>
-        ${formData.employmentType}
-        <br>
-
-        <strong>Work Location:</strong>
-        ${farmLocation}
-        <br>
-
-        <strong>Hourly Rate:</strong>
-        AUD $${formData.hourlyRate} per hour
-        <br>
-
-        <strong>Expected Working Hours:</strong>
-        ${workingHours}
-        <br>
-
-        <strong>Proposed Commencement Date:</strong>
-        ${commencementDate}
-        <br>
-
-        <strong>Employment Offer Reference:</strong>
-        ${referenceNumber}
-      </p>
-
-      ${imageHTML}
-
-      <h3>
-        VISA SPONSORSHIP &amp; IMMIGRATION COMPLIANCE
-      </h3>
-
-      <p>
-        We are pleased to confirm that ${formData.companyName} intends
-        to support your employer-sponsored visa application under the
-        Skills in Demand Visa (Subclass 482), subject to the completion
-        of all applicable sponsorship, nomination and visa requirements.
-      </p>
-
-      <p>
-        All visa and immigration processes will be conducted in
-        accordance with the applicable Australian immigration laws,
-        including the Migration Act 1958 (Cth) and Migration Regulations
-        1994 (Cth), as well as the relevant requirements administered
-        by the Australian Department of Home Affairs.
-      </p>
-
-      <p>
-        For official information regarding visa requirements, eligibility
-        criteria and immigration procedures, please refer to the following
-        Australian Government resources:
-      </p>
-
-      <p>
-        <strong>
-          Australian Department of Home Affairs – Immigration and Citizenship:
-        </strong>
-        <br>
-
-        <a
-          href="https://immi.homeaffairs.gov.au/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          https://immi.homeaffairs.gov.au/
-        </a>
-      </p>
-
-      <p>
-        <strong>
-          Skills in Demand Visa (Subclass 482):
-        </strong>
-        <br>
-
-        <a
-          href="https://immi.homeaffairs.gov.au/Visa-subsite/Pages/work/skills-in-demand-482-landing.aspx"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Official Subclass 482 information
-        </a>
-      </p>
-
-      <p>
-        <strong>
-          Australian Immigration Legislation:
-        </strong>
-        <br>
-
-        <a
-          href="https://www.legislation.gov.au/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          https://www.legislation.gov.au/
-        </a>
-      </p>
-
-      <p>
-        Please note that visa sponsorship, nomination and visa approval
-        are subject to applicable Australian immigration laws and the
-        decision of the Department of Home Affairs. This employment
-        offer does not guarantee visa approval.
-      </p>
-
-      <h3>
-        REQUIRED DOCUMENTS
-      </h3>
-
-      <ol>
-        <li>Full name as shown on passport.</li>
-        <li>Passport copy.</li>
-        <li>Updated CV/Resume.</li>
-        <li>Relevant farm work experience certificates.</li>
-        <li>
-          Educational and trade qualifications, where applicable.
-        </li>
-        <li>Current residential address.</li>
-        <li>Contact number and email address.</li>
-        <li>
-          Any additional documents requested by our HR or migration team.
-        </li>
-      </ol>
-
-      <h3>
-        NEXT STEPS
-      </h3>
-
-      <p>
-        Upon receipt and review of the required documents, our HR and
-        recruitment team will provide further information regarding
-        the employment contract, sponsorship arrangements and the
-        expected commencement date.
-      </p>
-
-      <p>
-        You are requested to review the employment offer carefully and
-        confirm your interest in proceeding with this opportunity by
-        replying to this email.
-      </p>
-
-      <p>
-        Congratulations on your successful application. We look forward
-        to welcoming you to ${formData.companyName} and having you join
-        our team.
-      </p>
-
-      <p>
-        Kind regards,
-        <br>
-        <br>
-
-        ${hrManager}
-        <br>
-
-        Human Resources &amp; Recruitment Team
-        <br>
-
-        ${formData.companyName}
-        <br>
-
-        ${companyEmail}
-        <br>
-
-        ${companyWebsite}
-        <br>
-
-        ${companyPhone}
-        <br>
-
-        ${companyABN}
-        <br>
-
-        ${companyAddress}
-        <br>
-
-        Australia
-      </p>
-
-    </div>
-
-  </div>
-
-</body>
-</html>
-`;
-
-    setHtmlEmail(generatedHTML);
-  };
-
-  // Copy HTML
-  const copyHTML = async () => {
-    if (!htmlEmail) {
-      alert('Please generate the email first.');
-      return;
-    }
 
     try {
-      await navigator.clipboard.writeText(htmlEmail);
-      alert('HTML email copied to clipboard!');
-    } catch (error) {
-      alert('Unable to copy HTML.');
-    }
-  };
 
-  // Open rendered email preview
-  const openPreview = () => {
-    if (!htmlEmail) {
-      alert('Please generate the email first.');
-      return;
-    }
+      // ----------------------------------------------
+      // FormData
+      // ----------------------------------------------
 
-    const previewWindow = window.open(
-      '',
-      '_blank',
-      'width=900,height=800'
-    );
+      const uploadData = new FormData();
 
-    if (!previewWindow) {
-      alert('Please allow pop-ups for this website.');
-      return;
-    }
+      uploadData.append(
+        'file',
+        photoFile
+      );
 
-    previewWindow.document.open();
-    previewWindow.document.write(htmlEmail);
-    previewWindow.document.close();
-  };
+      uploadData.append(
+        'upload_preset',
+        CLOUDINARY_UPLOAD_PRESET
+      );
 
-  // Download HTML file
-  const downloadHTML = () => {
-    if (!htmlEmail) {
-      alert('Please generate the email first.');
-      return;
-    }
 
-    const blob = new Blob(
-      [htmlEmail],
-      {
-        type: 'text/html',
+      // ----------------------------------------------
+      // Upload
+      // ----------------------------------------------
+
+      const response = await fetch(
+        CLOUDINARY_UPLOAD_URL,
+        {
+          method: 'POST',
+          body: uploadData,
+        }
+      );
+
+
+      const data = await response.json();
+
+
+      // ----------------------------------------------
+      // Check response
+      // ----------------------------------------------
+
+      if (!response.ok) {
+
+        console.error(
+          'Cloudinary error:',
+          data
+        );
+
+        throw new Error(
+          data?.error?.message ||
+          'Cloudinary image upload failed.'
+        );
+
       }
-    );
 
-    const url = URL.createObjectURL(blob);
 
-    const link = document.createElement('a');
+      // ----------------------------------------------
+      // Get public image URL
+      // ----------------------------------------------
 
-    link.href = url;
-    link.download = 'employment-offer-email.html';
+      if (!data.secure_url) {
 
-    document.body.appendChild(link);
+        throw new Error(
+          'Cloudinary did not return an image URL.'
+        );
 
-    link.click();
+      }
 
-    document.body.removeChild(link);
 
-    URL.revokeObjectURL(url);
+      console.log(
+        'Cloudinary image URL:',
+        data.secure_url
+      );
+
+
+      setPhotoUrl(
+        data.secure_url
+      );
+
+
+      return data.secure_url;
+
+    } finally {
+
+      setUploading(false);
+
+    }
+
   };
+
+
+  // ==================================================
+  // SEND EMAIL
+  // ==================================================
+
+  const sendEmail = async () => {
+
+    setSuccessMessage('');
+    setErrorMessage('');
+
+
+    // ----------------------------------------------
+    // Required fields
+    // ----------------------------------------------
+
+    if (!formData.clientName.trim()) {
+
+      setErrorMessage(
+        'Please enter the client full name.'
+      );
+
+      return;
+
+    }
+
+
+    if (!formData.emailSubject.trim()) {
+
+      setErrorMessage(
+        'Please enter the email subject.'
+      );
+
+      return;
+
+    }
+
+
+    if (!formData.toEmailAddress.trim()) {
+
+      setErrorMessage(
+        'Please enter the client email address.'
+      );
+
+      return;
+
+    }
+
+
+    if (!formData.fromName.trim()) {
+
+      setErrorMessage(
+        'Please enter the From Name.'
+      );
+
+      return;
+
+    }
+
+
+    // ----------------------------------------------
+    // Image
+    // ----------------------------------------------
+
+    if (!photoFile) {
+
+      setErrorMessage(
+        'Please select an image.'
+      );
+
+      return;
+
+    }
+
+
+    // ----------------------------------------------
+    // Destination URL
+    // ----------------------------------------------
+
+    if (!photoLink.trim()) {
+
+      setErrorMessage(
+        'Please enter the image destination URL.'
+      );
+
+      return;
+
+    }
+
+
+    if (!isValidUrl(photoLink.trim())) {
+
+      setErrorMessage(
+        'Please enter a valid image destination URL.'
+      );
+
+      return;
+
+    }
+
+
+    setSending(true);
+
+
+    try {
+
+      // ============================================
+      // UPLOAD IMAGE
+      // ============================================
+
+      let uploadedImageUrl = photoUrl;
+
+
+      if (!uploadedImageUrl) {
+
+        uploadedImageUrl =
+          await uploadImageToCloudinary();
+
+      }
+
+
+      // ============================================
+      // EMAILJS PARAMETERS
+      // ============================================
+
+      const templateParams = {
+
+        // ------------------------------------------
+        // Recipient
+        // ------------------------------------------
+
+        clientName:
+          formData.clientName,
+
+        emailSubject:
+          formData.emailSubject,
+
+        toEmailAddress:
+          formData.toEmailAddress,
+
+        replyTo:
+          formData.replyTo,
+
+        fromName:
+          formData.fromName,
+
+
+        // ------------------------------------------
+        // Employment
+        // ------------------------------------------
+
+        position:
+          formData.position,
+
+        companyName:
+          formData.companyName,
+
+        employmentType:
+          formData.employmentType,
+
+        farmLocation:
+          formData.farmLocation,
+
+        hourlyRate:
+          formData.hourlyRate,
+
+        workingHours:
+          formData.workingHours,
+
+        commencementDate:
+          formData.commencementDate,
+
+        referenceNumber:
+          formData.referenceNumber,
+
+
+        // ------------------------------------------
+        // Company
+        // ------------------------------------------
+
+        hrManager:
+          formData.hrManager,
+
+        companyEmail:
+          formData.companyEmail,
+
+        companyWebsite:
+          formData.companyWebsite,
+
+        companyPhone:
+          formData.companyPhone,
+
+        companyABN:
+          formData.companyABN,
+
+        companyAddress:
+          formData.companyAddress,
+
+
+        // ------------------------------------------
+        // IMAGE
+        // ------------------------------------------
+
+        photoUrl:
+          uploadedImageUrl,
+
+        photoLink:
+          photoLink.trim(),
+
+      };
+
+
+      console.log(
+        'EmailJS parameters:',
+        templateParams
+      );
+
+
+      // ============================================
+      // SEND EMAIL
+      // ============================================
+
+      const response = await emailjs.send(
+        SERVICE_ID,
+        TEMPLATE_ID,
+        templateParams,
+        {
+          publicKey: PUBLIC_KEY,
+        }
+      );
+
+
+      console.log(
+        'EmailJS response:',
+        response
+      );
+
+
+      setSuccessMessage(
+        `Email sent successfully to ${formData.toEmailAddress}`
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        'Email sending error:',
+        error
+      );
+
+
+      setErrorMessage(
+        error?.text ||
+        error?.message ||
+        'Failed to upload image or send email.'
+      );
+
+
+    } finally {
+
+      setSending(false);
+
+    }
+
+  };
+
+
+  // ==================================================
+  // RESET
+  // ==================================================
+
+  const resetForm = () => {
+
+    setFormData({
+      clientName: '',
+      emailSubject: '',
+      toEmailAddress: '',
+      replyTo: '',
+      fromName: '',
+
+      position: 'Farm Worker',
+      companyName: 'Agribusiness Australia',
+      employmentType: 'Full-time',
+      farmLocation: '',
+      hourlyRate: '22.00',
+      workingHours: '',
+      commencementDate: '',
+      referenceNumber: '',
+
+      hrManager: '',
+      companyEmail: '',
+      companyWebsite: '',
+      companyPhone: '',
+      companyABN: '',
+      companyAddress: '',
+    });
+
+
+    setPhotoFile(null);
+
+    setPhotoPreview('');
+
+    setPhotoUrl('');
+
+    setPhotoLink('');
+
+    setSuccessMessage('');
+
+    setErrorMessage('');
+
+
+    const fileInput =
+      document.getElementById('emailImage');
+
+
+    if (fileInput) {
+
+      fileInput.value = '';
+
+    }
+
+  };
+
+
+  // ==================================================
+  // UI
+  // ==================================================
 
   return (
-    <div className="home-page">
 
-      {/* FORM */}
+    <div className="home-page">
 
       <div className="form-container">
 
         <h1>
-          Employment Offer Email Generator
+          Employment Offer Email
         </h1>
 
         <p className="subtitle">
           Enter the applicant and employment details below.
         </p>
 
+
+        {/* SUCCESS */}
+
+        {successMessage && (
+
+          <div className="success-message">
+
+            {successMessage}
+
+          </div>
+
+        )}
+
+
+        {/* ERROR */}
+
+        {errorMessage && (
+
+          <div className="error-message">
+
+            {errorMessage}
+
+          </div>
+
+        )}
+
+
         <div className="form-grid">
 
-          {/* Client */}
+
+          {/* CLIENT NAME */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="clientName">
               Client Full Name
             </label>
 
             <input
+              id="clientName"
               type="text"
               name="clientName"
               value={formData.clientName}
@@ -529,7 +710,8 @@ function HomePage() {
 
           </div>
 
-          {/* Position */}
+
+          {/* SUBJECT */}
 
           <div className="form-group">
 
@@ -548,6 +730,9 @@ function HomePage() {
 
           </div>
 
+
+          {/* TO EMAIL */}
+
           <div className="form-group">
 
             <label htmlFor="toEmailAddress">
@@ -565,13 +750,57 @@ function HomePage() {
 
           </div>
 
+
+          {/* REPLY TO */}
+
           <div className="form-group">
 
-            <label>
+            <label htmlFor="replyTo">
+              Reply To
+            </label>
+
+            <input
+              id="replyTo"
+              type="email"
+              name="replyTo"
+              value={formData.replyTo}
+              onChange={handleChange}
+              placeholder="hr@example.com"
+            />
+
+          </div>
+
+
+          {/* FROM NAME */}
+
+          <div className="form-group">
+
+            <label htmlFor="fromName">
+              From Name
+            </label>
+
+            <input
+              id="fromName"
+              type="text"
+              name="fromName"
+              value={formData.fromName}
+              onChange={handleChange}
+              placeholder="Agribusiness Australia"
+            />
+
+          </div>
+
+
+          {/* POSITION */}
+
+          <div className="form-group">
+
+            <label htmlFor="position">
               Position
             </label>
 
             <input
+              id="position"
               type="text"
               name="position"
               value={formData.position}
@@ -580,15 +809,17 @@ function HomePage() {
 
           </div>
 
-          {/* Company */}
+
+          {/* COMPANY */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="companyName">
               Company Name
             </label>
 
             <input
+              id="companyName"
               type="text"
               name="companyName"
               value={formData.companyName}
@@ -597,15 +828,17 @@ function HomePage() {
 
           </div>
 
-          {/* Employment Type */}
+
+          {/* EMPLOYMENT TYPE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="employmentType">
               Employment Type
             </label>
 
             <select
+              id="employmentType"
               name="employmentType"
               value={formData.employmentType}
               onChange={handleChange}
@@ -627,15 +860,17 @@ function HomePage() {
 
           </div>
 
-          {/* Farm Location */}
+
+          {/* FARM LOCATION */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="farmLocation">
               Farm Location
             </label>
 
             <input
+              id="farmLocation"
               type="text"
               name="farmLocation"
               value={formData.farmLocation}
@@ -645,15 +880,17 @@ function HomePage() {
 
           </div>
 
-          {/* Hourly Rate */}
+
+          {/* HOURLY RATE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="hourlyRate">
               Hourly Rate (AUD)
             </label>
 
             <input
+              id="hourlyRate"
               type="number"
               step="0.01"
               name="hourlyRate"
@@ -663,15 +900,17 @@ function HomePage() {
 
           </div>
 
-          {/* Working Hours */}
+
+          {/* WORKING HOURS */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="workingHours">
               Expected Working Hours
             </label>
 
             <input
+              id="workingHours"
               type="text"
               name="workingHours"
               value={formData.workingHours}
@@ -681,15 +920,17 @@ function HomePage() {
 
           </div>
 
-          {/* Date */}
+
+          {/* COMMENCEMENT DATE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="commencementDate">
               Proposed Commencement Date
             </label>
 
             <input
+              id="commencementDate"
               type="date"
               name="commencementDate"
               value={formData.commencementDate}
@@ -698,15 +939,17 @@ function HomePage() {
 
           </div>
 
-          {/* Reference */}
+
+          {/* REFERENCE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="referenceNumber">
               Employment Offer Reference
             </label>
 
             <input
+              id="referenceNumber"
               type="text"
               name="referenceNumber"
               value={formData.referenceNumber}
@@ -716,15 +959,17 @@ function HomePage() {
 
           </div>
 
-          {/* HR Manager */}
+
+          {/* HR MANAGER */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="hrManager">
               HR Manager Full Name
             </label>
 
             <input
+              id="hrManager"
               type="text"
               name="hrManager"
               value={formData.hrManager}
@@ -734,15 +979,17 @@ function HomePage() {
 
           </div>
 
-          {/* Email */}
+
+          {/* COMPANY EMAIL */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="companyEmail">
               Company Email
             </label>
 
             <input
+              id="companyEmail"
               type="email"
               name="companyEmail"
               value={formData.companyEmail}
@@ -752,15 +999,17 @@ function HomePage() {
 
           </div>
 
-          {/* Website */}
+
+          {/* WEBSITE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="companyWebsite">
               Company Website
             </label>
 
             <input
+              id="companyWebsite"
               type="url"
               name="companyWebsite"
               value={formData.companyWebsite}
@@ -770,15 +1019,17 @@ function HomePage() {
 
           </div>
 
-          {/* Phone */}
+
+          {/* PHONE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="companyPhone">
               Company Phone
             </label>
 
             <input
+              id="companyPhone"
               type="text"
               name="companyPhone"
               value={formData.companyPhone}
@@ -788,15 +1039,17 @@ function HomePage() {
 
           </div>
 
+
           {/* ABN */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="companyABN">
               Company ABN
             </label>
 
             <input
+              id="companyABN"
               type="text"
               name="companyABN"
               value={formData.companyABN}
@@ -806,15 +1059,17 @@ function HomePage() {
 
           </div>
 
-          {/* Address */}
+
+          {/* ADDRESS */}
 
           <div className="form-group full-width">
 
-            <label>
+            <label htmlFor="companyAddress">
               Company Office Address
             </label>
 
             <input
+              id="companyAddress"
               type="text"
               name="companyAddress"
               value={formData.companyAddress}
@@ -824,46 +1079,54 @@ function HomePage() {
 
           </div>
 
-          {/* PHOTO */}
+
+          {/* IMAGE */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="emailImage">
               Email Image
             </label>
 
             <input
+              id="emailImage"
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/jpeg,image/png,image/webp"
               onChange={handlePhotoChange}
             />
 
             <small>
-              Maximum image size: 5 MB
+              JPG, PNG and WebP — maximum 5 MB.
             </small>
 
           </div>
 
-          {/* IMAGE URL */}
+
+          {/* IMAGE DESTINATION */}
 
           <div className="form-group">
 
-            <label>
+            <label htmlFor="photoLink">
               Image Destination URL
             </label>
 
             <input
+              id="photoLink"
               type="url"
               value={photoLink}
-              onChange={(e) => setPhotoLink(e.target.value)}
+              onChange={(e) => {
+                setPhotoLink(e.target.value);
+                setErrorMessage('');
+              }}
               placeholder="https://example.com/page"
             />
 
             <small>
-              The image will link to this address.
+              Clicking the image in the email opens this URL.
             </small>
 
           </div>
+
 
           {/* IMAGE PREVIEW */}
 
@@ -903,9 +1166,28 @@ function HomePage() {
 
               </div>
 
-              <small>
-                Click the preview to test the destination link.
-              </small>
+
+              {/* CLOUDINARY STATUS */}
+
+              {photoUrl && (
+
+                <small style={{
+                  color: '#166534',
+                  fontWeight: '600'
+                }}>
+                  ✓ Image uploaded successfully.
+                </small>
+
+              )}
+
+              {!photoUrl && (
+
+                <small>
+                  The image will be uploaded automatically
+                  when you send the email.
+                </small>
+
+              )}
 
             </div>
 
@@ -913,70 +1195,47 @@ function HomePage() {
 
         </div>
 
-        {/* GENERATE */}
 
-        <button
-          className="generate-button"
-          onClick={generateEmail}
-        >
-          Generate HTML Email
-        </button>
+        {/* ACTION BUTTONS */}
 
-      </div>
+        <div className="action-buttons">
 
-      {/* GENERATED HTML */}
+          <button
+            type="button"
+            className="generate-button"
+            onClick={sendEmail}
+            disabled={sending || uploading}
+          >
 
-      {htmlEmail && (
+            {uploading
+              ? 'Uploading Image...'
+              : sending
+                ? 'Sending Email...'
+                : 'Send Email'}
 
-        <div className="email-preview">
+          </button>
 
-          <div className="preview-header">
 
-            <h2>
-              Generated HTML Email
-            </h2>
+          <button
+            type="button"
+            className="reset-button"
+            onClick={resetForm}
+            disabled={sending || uploading}
+          >
 
-            <div className="preview-buttons">
+            Reset
 
-              <button
-                className="preview-button"
-                onClick={openPreview}
-              >
-                Preview
-              </button>
-
-              <button
-                className="copy-button"
-                onClick={copyHTML}
-              >
-                Copy HTML
-              </button>
-
-              <button
-                className="download-button"
-                onClick={downloadHTML}
-              >
-                Download HTML
-              </button>
-
-            </div>
-
-          </div>
-
-          <textarea
-            value={htmlEmail}
-            onChange={(e) => setHtmlEmail(e.target.value)}
-            rows={35}
-            spellCheck={false}
-          />
+          </button>
 
         </div>
 
-      )}
+      </div>
 
     </div>
+
   );
+
 }
 
-export default HomePage;
 
+export default HomePage;
