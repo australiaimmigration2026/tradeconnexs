@@ -2,9 +2,9 @@ import '../App.css';
 import { useState } from 'react';
 import emailjs from '@emailjs/browser';
 
-const SERVICE_ID = 'service_0cqgfzg';
-const TEMPLATE_ID = 'template_zgljqkp';
-const PUBLIC_KEY = 'Wg5ZcPyVwQSQUnHVC';
+const SERVICE_ID = 'service_gcseomk';
+const TEMPLATE_ID = 'template_6hvbfzg';
+const PUBLIC_KEY = '6Wb-gih1kEnWwBxpc';
 
 // ==================================================
 // CLOUDINARY
